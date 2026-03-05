@@ -7,7 +7,13 @@ package inference
 #include <stdlib.h>
 */
 import "C"
-import "unsafe"
+import (
+	"github.com/noks/ai-inference-engine/pkg/util"
+	"image"
+	"image/color"
+	"image/draw"
+	"unsafe"
+)
 
 type Box struct {
 	X1, Y1, X2, Y2 float32
@@ -55,15 +61,20 @@ func (m *Model) GetLastError() int {
 }
 
 // Inference runs inference on an image (raw RGB bytes)
-func (m *Model) Inference(img []byte, width, height int) []Box {
-	if m.ptr == nil || len(img) == 0 {
+func (m *Model) Inference(img image.Image) []Box {
+	if m.ptr == nil || img == nil {
 		return nil
 	}
+
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	imgBytes := util.RGBABytes(img)
 
 	var count C.int
 	out := C.Inference(
 		m.ptr,
-		(*C.uint8_t)(unsafe.Pointer(&img[0])),
+		(*C.uint8_t)(unsafe.Pointer(&imgBytes[0])),
 		C.int(width),
 		C.int(height),
 		&count,
@@ -87,4 +98,50 @@ func (m *Model) Inference(img []byte, width, height int) []Box {
 		}
 	}
 	return boxes
+}
+
+func AnnotateBoxes(img image.Image, boxes []Box) *image.RGBA {
+	if img == nil || len(boxes) == 0 {
+		return nil
+	}
+
+	// Create RGBA copy of the image
+	rgba := image.NewRGBA(img.Bounds())
+	draw.Draw(rgba, rgba.Bounds(), img, image.Point{}, draw.Src)
+
+	rectColor := color.RGBA{255, 0, 0, 255} // Red boxes
+	lineWidth := 2
+
+	for _, box := range boxes {
+		x1 := int(box.X1)
+		y1 := int(box.Y1)
+		x2 := int(box.X2)
+		y2 := int(box.Y2)
+
+		// Draw horizontal lines
+		for i := 0; i < lineWidth; i++ {
+			for x := x1; x <= x2; x++ {
+				if y1+i < rgba.Bounds().Dy() {
+					rgba.Set(x, y1+i, rectColor)
+				}
+				if y2-i >= 0 {
+					rgba.Set(x, y2-i, rectColor)
+				}
+			}
+		}
+
+		// Draw vertical lines
+		for i := 0; i < lineWidth; i++ {
+			for y := y1; y <= y2; y++ {
+				if x1+i < rgba.Bounds().Dx() {
+					rgba.Set(x1+i, y, rectColor)
+				}
+				if x2-i >= 0 {
+					rgba.Set(x2-i, y, rectColor)
+				}
+			}
+		}
+	}
+
+	return rgba
 }

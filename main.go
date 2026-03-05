@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/nosyliam/revolution/ai-inference-engine/platform/ai/windows"
+	"github.com/noks/ai-inference-engine/ai/windows"
 	"image"
 	"image/png"
 	"log"
@@ -21,8 +21,19 @@ func LoadPng(path string) image.Image {
 	}
 	return img
 }
-
 func main() {
 	comboScene := LoadPng("C:\\Users\\32nok\\PycharmProjects\\combo_detection\\dataset\\images\\train\\coco_combo_scene_1_0.png")
-	inference.LoadModel("")
+	model := inference.LoadModel("C:\\Users\\32nok\\go\\src\\github.com\\noks\\ai-inference-engine\\ai\\models\\best.onnx")
+	model.SetConfidence(0.5)
+
+	boxes := model.Inference(comboScene)
+	annotated := inference.AnnotateBoxes(comboScene, boxes)
+
+	outFile, err := os.Create("annotated.png")
+	if err != nil {
+		panic(err)
+	}
+	defer outFile.Close()
+
+	png.Encode(outFile, annotated)
 }
